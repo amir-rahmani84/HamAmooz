@@ -1,5 +1,6 @@
 from collections import Counter, defaultdict
 from parser import parse_line
+import gzip
 
 
 def process_file(file_path):
@@ -19,14 +20,34 @@ def process_file(file_path):
     status_per_ip = defaultdict(Counter) # status code distribution per IP
     endpoints_per_ip = defaultdict(set)  # distinct endpoints accessed per IP
     failed_logins = Counter()            # 401 on /login per IP
+    error_hour_counter = Counter()       # total 5xx Errors per hours
+
+    # Detect if the file is compressed (ends with .gz)
+    try:
+        if file_path.endswith('.gz'):
+            # Open in text mode; gzip.open will raise BadGzipFile if not a valid gzip
+            file_obj = gzip.open(file_path, 'rt', encoding='utf-8', errors='replace')
+        else:
+            # Regular file – open in text mode
+            file_obj = open(file_path, 'rt', encoding='utf-8', errors='replace')
+    except FileNotFoundError:
+        raise FileNotFoundError(f"File not found: {file_path}")
+    except IsADirectoryError:
+        raise IsADirectoryError(f"Path is a directory, not a file: {file_path}")
+    except PermissionError:
+        raise PermissionError(f"Permission denied reading file: {file_path}")
+    except gzip.BadGzipFile:
+        # The file has a .gz suffix but is not a valid gzip file
+        raise ValueError(f"File has .gz extension but is not a valid gzip file: {file_path}")
+    except OSError as e:
+        # Catch other OS-level errors (e.g., invalid argument)
+        raise OSError(f"Error opening file {file_path}: {e}")
 
     # we use errors="replace" so if the file contains invalid utf-8 bytes the function doesnt crash
-    with open(file_path, "r", encoding="utf-8", errors="replace") as file:
-
-        for line in file:
-
-            # Remove the new line character from entry
-            line = line.rstrip("\n")
+    with file_obj:
+        for line in file_obj:
+            
+            line = line.rstrip()   # remove newline
 
             entry = parse_line(line)
 
@@ -52,6 +73,9 @@ def process_file(file_path):
             if 400 <= entry.status < 600:
                 error_requests += 1
 
+            # we calculate the server side errors per hour here
+            if 500 <= entry.status < 600:
+                error_hour_counter[entry.timestamp.hour] += 1
             # --- Collect raw per‑IP data for later analysis ---
             ip = entry.ip
             requests_per_ip[ip] += 1
@@ -68,8 +92,10 @@ def process_file(file_path):
         "bad_lines": bad_lines,
         "unique_ips": len(unique_ips),
         "error_requests": error_requests,
-        "hourly_distribution": hour_counter,
         "endpoint_counter": endpoint_counter,
+        # hour related data
+        "hourly_distribution": hour_counter,
+        "error_hour_counter": error_hour_counter,
         # raw per‑IP data
         "requests_per_ip": requests_per_ip,
         "status_per_ip": status_per_ip,

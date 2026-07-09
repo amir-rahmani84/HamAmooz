@@ -145,10 +145,66 @@ def detect_suspicious_activities(stats, config=None):
     return suspicious
 
 
+def detect_error_spikes(stats, config):
+    """
+    Detect hours where the 5xx error rate exceeds a threshold.
+    Returns a list of (start_hour, end_hour) intervals (consecutive hours).
+    """
+    hour_counter = stats["hourly_distribution"]      # all requests per hour
+    error_hour_counter = stats["error_hour_counter"] # 5xx errors per hour
+
+    # Only consider hours that actually received requests
+    hours_with_requests = [h for h, count in hour_counter.items() if count > 0]
+    if not hours_with_requests:
+        return []
+
+    # Compute error rate (%) for each such hour
+    error_rates = {}
+    for h in hours_with_requests:
+        total = hour_counter[h]
+        errors = error_hour_counter.get(h, 0)
+        error_rates[h] = (errors / total) * 100.0
+
+    # Determine threshold: use config value if provided, else dynamic (mean + 2*std)
+    threshold = config.get("error_spike_threshold")
+    if threshold is None:
+        rates = list(error_rates.values())
+        mean = statistics.mean(rates)
+        std = statistics.stdev(rates) if len(rates) > 1 else 0.0
+        threshold = mean + 2 * std
+
+    # Find hours exceeding threshold
+    spike_hours = sorted([h for h, rate in error_rates.items() if rate > threshold])
+
+    # Group consecutive hours into intervals
+    intervals = []
+    if spike_hours:
+        start = spike_hours[0]
+        end = spike_hours[0]
+        for h in spike_hours[1:]:
+            if h == end + 1:
+                end = h
+            else:
+                intervals.append((start, end))
+                start = end = h
+        intervals.append((start, end))
+
+    return intervals
+
+
 def generate_report(raw_stats, config=None):
     """
     Combine raw stats with computed analysis and return a complete report dict.
     """
+    if config is None:
+        config = {
+            "failed_login_threshold": 5,
+            "request_rate_threshold": None,
+            "error_rate_threshold": 0.8,
+            "scanning_endpoint_threshold": 40,
+            "error_spike_threshold": None,   # None → dynamic (mean + 2*std)
+        }
+
     report = {
         "total_requests": raw_stats["total_requests"],
         "bad_lines": raw_stats["bad_lines"],
@@ -158,5 +214,6 @@ def generate_report(raw_stats, config=None):
         "top_endpoints": compute_top_endpoints(raw_stats),
         "hourly_distribution": raw_stats["hourly_distribution"],
         "suspicious_activities": detect_suspicious_activities(raw_stats, config),
+        "error_spikes": detect_error_spikes(raw_stats, config),   # <-- new key
     }
     return report
