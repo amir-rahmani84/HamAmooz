@@ -1,16 +1,24 @@
-from collections import Counter
+from collections import Counter, defaultdict
 from parser import parse_line
 
 
 def process_file(file_path):
+    """
+    Process a log file and return raw statistics counters.
+    No analysis is performed here – only collection of raw data.
+    """
 
     total_requests = 0
     bad_lines = 0
     error_requests = 0
 
-    unique_ips = set()
-    endpoint_counter = Counter()
-    hour_counter = Counter()
+    unique_ips = set()                   # total unique IPs
+    endpoint_counter = Counter()         # total calls per endpoint
+    hour_counter = Counter()             # total requests per hour
+    requests_per_ip = Counter()          # total requests per IP
+    status_per_ip = defaultdict(Counter) # status code distribution per IP
+    endpoints_per_ip = defaultdict(set)  # distinct endpoints accessed per IP
+    failed_logins = Counter()            # 401 on /login per IP
 
     # we use errors="replace" so if the file contains invalid utf-8 bytes the function doesnt crash
     with open(file_path, "r", encoding="utf-8", errors="replace") as file:
@@ -44,22 +52,27 @@ def process_file(file_path):
             if 400 <= entry.status < 600:
                 error_requests += 1
 
-    # this shouldnt happen but if we do not get any valid entries
-    # we handle the division of zero like this
-    if total_requests == 0:
-        error_rate = 0.0
-    else:
-        error_rate = (error_requests / total_requests) * 100
+            # --- Collect raw per‑IP data for later analysis ---
+            ip = entry.ip
+            requests_per_ip[ip] += 1
+            status_per_ip[ip][entry.status] += 1
+            endpoints_per_ip[ip].add(entry.path)
 
-    # Basic report
-    # might save the Results in a file later on
-    
+            # Specific detection: failed logins (raw counter)
+            if entry.path == '/login' and entry.status == 401:
+                failed_logins[ip] += 1
+
+    # Return only raw data – no derived metrics
     return {
         "total_requests": total_requests,
         "bad_lines": bad_lines,
         "unique_ips": len(unique_ips),
-        "top_endpoints": endpoint_counter.most_common(10),
         "error_requests": error_requests,
-        "error_rate": error_rate,
-        "hourly_distribution": hour_counter
+        "hourly_distribution": hour_counter,
+        "endpoint_counter": endpoint_counter,
+        # raw per‑IP data
+        "requests_per_ip": requests_per_ip,
+        "status_per_ip": status_per_ip,
+        "endpoints_per_ip": endpoints_per_ip,
+        "failed_logins": failed_logins,
     }
