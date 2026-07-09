@@ -53,9 +53,13 @@ def process_file(file_path):
 
     # Basic report
     # might save the Results in a file later on
-    print(f"Total Requests      : {total_requests}")
-    print(f"Malformed Lines     : {bad_lines}")
-    print(f"Unique IPs          : {len(unique_ips)}")
-    print(f"Hourly distribution : {hour_counter}")
-    print(f"Error Rate          : {error_rate:.2f}%")
-    print(endpoint_counter.most_common(10))
+    
+    return {
+        "total_requests": total_requests,
+        "bad_lines": bad_lines,
+        "unique_ips": len(unique_ips),
+        "top_endpoints": endpoint_counter.most_common(10),
+        "error_requests": error_requests,
+        "error_rate": error_rate,
+        "hourly_distribution": hour_counter
+    }
