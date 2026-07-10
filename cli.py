@@ -1,4 +1,5 @@
 import argparse
+import os  # not needed but might be used later
 
 
 def parse_arguments():
@@ -62,6 +63,15 @@ def parse_arguments():
         "--json",
         action="store_true",
         help="Output report in JSON format instead of formatted text"
+    )
+
+    # NEW: JSON file output option
+    parser.add_argument(
+        "--output",
+        type=str,
+        help="Write JSON report to the specified file path. "
+             "If --json is not given, no report is printed to stdout. "
+             "If --json is also given, the JSON report is both printed and saved."
     )
 
     return parser.parse_args()

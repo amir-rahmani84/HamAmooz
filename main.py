@@ -6,6 +6,7 @@ from parser import parse_timestamp
 import sys
 import json
 import time
+import os  # for directory creation
 
 # Helper to parse section/type strings into sets
 def parse_list_string(s, valid_values, default_set):
@@ -68,12 +69,28 @@ def main():
     report = generate_report(stats, sections_set=sections_set, suspicious_set=suspicious_set,
                              top_n=args.top)
 
-    # Output report
+    # Handle output
+    # If --output is given, write JSON to the specified file
+    if args.output:
+        try:
+            # Ensure the directory exists
+            output_dir = os.path.dirname(args.output)
+            if output_dir:
+                os.makedirs(output_dir, exist_ok=True)
+            with open(args.output, 'w', encoding='utf-8') as f:
+                json.dump(report, f, indent=2)
+        except Exception as e:
+            print(f"Error writing to output file '{args.output}': {e}", file=sys.stderr)
+            sys.exit(1)
+
+    # Decide what to print to stdout
     if args.json:
-        # Serialize report to JSON
+        # JSON to stdout (regardless of --output, we print it)
         print(json.dumps(report, indent=2))
-    else:
+    elif not args.output:
+        # No --output and no --json -> print formatted text
         print_report(report)
+    # If args.output is given and --json is False, we print nothing (only stderr)
 
     # Record end time and report execution time to stderr
     end_time_total = time.time()
