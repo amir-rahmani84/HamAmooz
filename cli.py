@@ -32,4 +32,36 @@ def parse_arguments():
         help="Comma-separated list of suspicious activity types: brute_force,high_volume,high_error_rate,endpoint_scanning,all (default: brute_force)"
     )
 
+    # Add top N endpoints option
+    parser.add_argument(
+        "--top",
+        type=int,
+        default=10,
+        help="Number of top endpoints to display (default: 10)"
+    )
+
+    # Add time range options
+    parser.add_argument(
+        "--from",
+        dest="from_time",
+        type=str,
+        default=None,
+        help="Start time for analysis (Apache log timestamp format, e.g., '01/Jun/2026:09:14:22 +0000')"
+    )
+
+    parser.add_argument(
+        "--to",
+        dest="to_time",
+        type=str,
+        default=None,
+        help="End time for analysis (Apache log timestamp format)"
+    )
+
+    # Add JSON output option
+    parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Output report in JSON format instead of formatted text"
+    )
+
     return parser.parse_args()

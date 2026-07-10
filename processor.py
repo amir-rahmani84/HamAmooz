@@ -3,11 +3,12 @@ from parser import parse_line
 import gzip
 
 
-def process_file(file_path, sections_set=None, suspicious_set=None):
+def process_file(file_path, sections_set=None, suspicious_set=None, start_time=None, end_time=None):
     """
     Process a log file and return raw statistics counters.
     Only collects data that is needed based on the provided sections and suspicious types.
     No analysis is performed here – only collection of raw data.
+    Optionally filters entries by time range if start_time and/or end_time are provided.
     """
     # Default to all if not provided (though main should always provide)
     if sections_set is None:
@@ -73,6 +74,12 @@ def process_file(file_path, sections_set=None, suspicious_set=None):
             if entry is None:
                 if need_basic:
                     bad_lines += 1
+                continue
+
+            # Apply time filter if provided
+            if start_time is not None and entry.timestamp < start_time:
+                continue
+            if end_time is not None and entry.timestamp > end_time:
                 continue
 
             # Conditionally update counters based on which data is needed

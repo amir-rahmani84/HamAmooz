@@ -208,7 +208,7 @@ def detect_error_spikes(stats, config):
     return intervals
 
 
-def generate_report(raw_stats, sections_set=None, suspicious_set=None):
+def generate_report(raw_stats, sections_set=None, suspicious_set=None, top_n=10):
     """
     Combine raw stats with computed analysis and return a complete report dict.
     Only computes sections that are requested (default: all).
@@ -231,7 +231,7 @@ def generate_report(raw_stats, sections_set=None, suspicious_set=None):
 
     # Endpoints section
     if 'endpoints' in sections_set and 'endpoint_counter' in raw_stats:
-        report['top_endpoints'] = compute_top_endpoints(raw_stats)
+        report['top_endpoints'] = compute_top_endpoints(raw_stats, n=top_n)
 
     # Hourly section
     if 'hourly' in sections_set and 'hourly_distribution' in raw_stats:
