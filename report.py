@@ -4,8 +4,8 @@ from collections import Counter
 
 def compute_error_rate(stats):
     """Compute overall error rate from raw stats."""
-    total = stats["total_requests"]
-    errors = stats["error_requests"]
+    total = stats.get("total_requests", 0)
+    errors = stats.get("error_requests", 0)
     if total == 0:
         return 0.0
     return (errors / total) * 100
@@ -13,7 +13,9 @@ def compute_error_rate(stats):
 
 def compute_top_endpoints(stats, n=10):
     """Return the top N endpoints by request count."""
-    counter = stats["endpoint_counter"]
+    counter = stats.get("endpoint_counter")
+    if counter is None:
+        return []
     return counter.most_common(n)
 
 
@@ -23,7 +25,9 @@ def detect_brute_force(stats, config):
     Returns a list of suspicious activity dicts.
     """
     suspicious = []
-    failed = stats["failed_logins"]
+    failed = stats.get("failed_logins")
+    if failed is None:
+        return suspicious
     threshold = config.get("failed_login_threshold", 5)
     for ip, count in failed.items():
         if count > threshold:
@@ -42,7 +46,7 @@ def detect_high_volume(stats, config):
     Returns a list of suspicious activity dicts.
     """
     suspicious = []
-    req_per_ip = stats["requests_per_ip"]
+    req_per_ip = stats.get("requests_per_ip")
     if not req_per_ip:
         return suspicious
 
@@ -52,8 +56,6 @@ def detect_high_volume(stats, config):
 
     threshold_vol = config.get("request_rate_threshold")
     if threshold_vol is None:
-        # this is not a good implementation but since we are not using the 
-        # timestamps it should be fine for now (using a fixed number works at this time aswell)
         threshold_vol = mean + 2 * std
 
     for ip, count in req_per_ip.items():
@@ -74,12 +76,13 @@ def detect_high_error_rate(stats, config):
     """
     suspicious = []
     threshold = config.get("error_rate_threshold", 0.8)
+    status_per_ip = stats.get("status_per_ip")
+    if status_per_ip is None:
+        return suspicious
 
-    for ip, status_counts in stats["status_per_ip"].items():
+    for ip, status_counts in status_per_ip.items():
         total = sum(status_counts.values())
         errors = sum(v for status, v in status_counts.items() if status >= 400)
-        # if the total amount of requests are not high the error ratio is not suspicious
-        # AGAIN since we are  not using timestamps this should suffice for now
         if total > 50:
             error_ratio = errors / total
             if error_ratio > threshold:
@@ -99,10 +102,11 @@ def detect_endpoint_scanning(stats, config):
     """
     suspicious = []
     threshold = config.get("scanning_endpoint_threshold", 20)
+    endpoints_per_ip = stats.get("endpoints_per_ip")
+    if endpoints_per_ip is None:
+        return suspicious
 
-    for ip, endpoints in stats["endpoints_per_ip"].items():
-        # AGAIN usually we care more about sensitive Ips and the time window of requests
-        # this should suffice for now
+    for ip, endpoints in endpoints_per_ip.items():
         if len(endpoints) > threshold:
             suspicious.append({
                 "type": "endpoint_scanning",
@@ -113,7 +117,7 @@ def detect_endpoint_scanning(stats, config):
     return suspicious
 
 
-def detect_suspicious_activities(stats, config=None):
+def detect_suspicious_activities(stats, config=None, types=None):
     """
     Detect various suspicious patterns from the raw statistics.
     Aggregates results from individual detection functions.
@@ -125,6 +129,8 @@ def detect_suspicious_activities(stats, config=None):
             "error_rate_threshold": 0.8,
             "scanning_endpoint_threshold": 40,
         }
+    types: set or list of specific detection types to include (e.g., {'brute_force'}).
+           If None or 'all', include all.
     """
     if config is None:
         config = {
@@ -134,13 +140,22 @@ def detect_suspicious_activities(stats, config=None):
             "scanning_endpoint_threshold": 40,
         }
 
-    suspicious = []
-    suspicious.extend(detect_brute_force(stats, config))
-    suspicious.extend(detect_high_volume(stats, config))
-    suspicious.extend(detect_high_error_rate(stats, config))
-    suspicious.extend(detect_endpoint_scanning(stats, config))
+    # Determine which detection functions to run
+    all_types = {
+        'brute_force': detect_brute_force,
+        'high_volume': detect_high_volume,
+        'high_error_rate': detect_high_error_rate,
+        'endpoint_scanning': detect_endpoint_scanning,
+    }
+    if types is None or 'all' in types:
+        selected = all_types.values()
+    else:
+        # types can be a set or list
+        selected = [all_types[t] for t in types if t in all_types]
 
-    # Additional checks can be added here by calling new detection functions.
+    suspicious = []
+    for detector in selected:
+        suspicious.extend(detector(stats, config))
 
     return suspicious
 
@@ -150,10 +165,11 @@ def detect_error_spikes(stats, config):
     Detect hours where the 5xx error rate exceeds a threshold.
     Returns a list of (start_hour, end_hour) intervals (consecutive hours).
     """
-    hour_counter = stats["hourly_distribution"]      # all requests per hour
-    error_hour_counter = stats["error_hour_counter"] # 5xx errors per hour
+    hour_counter = stats.get("hourly_distribution")
+    error_hour_counter = stats.get("error_hour_counter")
+    if hour_counter is None or error_hour_counter is None:
+        return []
 
-    # Only consider hours that actually received requests
     hours_with_requests = [h for h, count in hour_counter.items() if count > 0]
     if not hours_with_requests:
         return []
@@ -192,28 +208,53 @@ def detect_error_spikes(stats, config):
     return intervals
 
 
-def generate_report(raw_stats, config=None):
+def generate_report(raw_stats, sections_set=None, suspicious_set=None):
     """
     Combine raw stats with computed analysis and return a complete report dict.
+    Only computes sections that are requested (default: all).
     """
-    if config is None:
-        config = {
-            "failed_login_threshold": 5,
-            "request_rate_threshold": None,
-            "error_rate_threshold": 0.8,
-            "scanning_endpoint_threshold": 40,
-            "error_spike_threshold": None,   # None → dynamic (mean + 2*std)
-        }
+    # Default to all if not provided
+    if sections_set is None:
+        sections_set = {'basic', 'endpoints', 'hourly', 'suspicious', 'error-spikes'}
+    if suspicious_set is None:
+        suspicious_set = {'brute_force', 'high_volume', 'high_error_rate', 'endpoint_scanning'}
 
-    report = {
-        "total_requests": raw_stats["total_requests"],
-        "bad_lines": raw_stats["bad_lines"],
-        "unique_ips": raw_stats["unique_ips"],
-        "error_requests": raw_stats["error_requests"],
-        "error_rate": compute_error_rate(raw_stats),
-        "top_endpoints": compute_top_endpoints(raw_stats),
-        "hourly_distribution": raw_stats["hourly_distribution"],
-        "suspicious_activities": detect_suspicious_activities(raw_stats, config),
-        "error_spikes": detect_error_spikes(raw_stats, config),   # <-- new key
-    }
+    report = {}
+
+    # Basic section
+    if 'basic' in sections_set:
+        report['total_requests'] = raw_stats.get('total_requests', 0)
+        report['bad_lines'] = raw_stats.get('bad_lines', 0)
+        report['unique_ips'] = raw_stats.get('unique_ips', 0)
+        report['error_requests'] = raw_stats.get('error_requests', 0)
+        report['error_rate'] = compute_error_rate(raw_stats)
+
+    # Endpoints section
+    if 'endpoints' in sections_set and 'endpoint_counter' in raw_stats:
+        report['top_endpoints'] = compute_top_endpoints(raw_stats)
+
+    # Hourly section
+    if 'hourly' in sections_set and 'hourly_distribution' in raw_stats:
+        report['hourly_distribution'] = raw_stats['hourly_distribution']
+
+    # Suspicious section
+    if 'suspicious' in sections_set:
+        # The raw_stats should contain the necessary data if the processor collected it.
+        # We still guard against missing keys, but we can assume they exist if the
+        # corresponding detector was enabled.
+        required_keys = {'requests_per_ip', 'status_per_ip', 'endpoints_per_ip', 'failed_logins'}
+        if all(k in raw_stats for k in required_keys):
+            report['suspicious_activities'] = detect_suspicious_activities(
+                raw_stats, types=suspicious_set
+            )
+        else:
+            report['suspicious_activities'] = []
+
+    # Error spikes section
+    if 'error-spikes' in sections_set:
+        if 'hourly_distribution' in raw_stats and 'error_hour_counter' in raw_stats:
+            report['error_spikes'] = detect_error_spikes(raw_stats, {})
+        else:
+            report['error_spikes'] = []
+
     return report
