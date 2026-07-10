@@ -1,6 +1,6 @@
 import statistics
 from collections import Counter
-
+import config
 
 def compute_error_rate(stats):
     """Compute overall error rate from raw stats."""
@@ -19,7 +19,7 @@ def compute_top_endpoints(stats, n=10):
     return counter.most_common(n)
 
 
-def detect_brute_force(stats, config):
+def detect_brute_force(stats, config_dict):
     """
     Detect brute-force attempts (excessive failed logins on /login).
     Returns a list of suspicious activity dicts.
@@ -28,7 +28,7 @@ def detect_brute_force(stats, config):
     failed = stats.get("failed_logins")
     if failed is None:
         return suspicious
-    threshold = config.get("failed_login_threshold", 5)
+    threshold = config_dict.get("failed_login_threshold", config.FAILED_LOGIN_THRESHOLD)
     for ip, count in failed.items():
         if count > threshold:
             suspicious.append({
@@ -40,7 +40,7 @@ def detect_brute_force(stats, config):
     return suspicious
 
 
-def detect_high_volume(stats, config):
+def detect_high_volume(stats, config_dict):
     """
     Detect IPs with unusually high request volume (DDoS / scraping).
     Returns a list of suspicious activity dicts.
@@ -54,7 +54,7 @@ def detect_high_volume(stats, config):
     mean = statistics.mean(values)
     std = statistics.stdev(values) if len(values) > 1 else 0
 
-    threshold_vol = config.get("request_rate_threshold")
+    threshold_vol = config_dict.get("request_rate_threshold")
     if threshold_vol is None:
         threshold_vol = mean + 2 * std
 
@@ -69,13 +69,13 @@ def detect_high_volume(stats, config):
     return suspicious
 
 
-def detect_high_error_rate(stats, config):
+def detect_high_error_rate(stats, config_dict):
     """
     Detect IPs with a high proportion of error responses (status >= 400).
     Returns a list of suspicious activity dicts.
     """
     suspicious = []
-    threshold = config.get("error_rate_threshold", 0.8)
+    threshold = config_dict.get("error_rate_threshold", config.ERROR_RATE_THRESHOLD)
     status_per_ip = stats.get("status_per_ip")
     if status_per_ip is None:
         return suspicious
@@ -95,13 +95,13 @@ def detect_high_error_rate(stats, config):
     return suspicious
 
 
-def detect_endpoint_scanning(stats, config):
+def detect_endpoint_scanning(stats, config_dict):
     """
     Detect IPs that access an unusually high number of distinct endpoints.
     Returns a list of suspicious activity dicts.
     """
     suspicious = []
-    threshold = config.get("scanning_endpoint_threshold", 20)
+    threshold = config_dict.get("scanning_endpoint_threshold", config.SCANNING_ENDPOINT_THRESHOLD)
     endpoints_per_ip = stats.get("endpoints_per_ip")
     if endpoints_per_ip is None:
         return suspicious
@@ -117,7 +117,7 @@ def detect_endpoint_scanning(stats, config):
     return suspicious
 
 
-def detect_suspicious_activities(stats, config=None, types=None):
+def detect_suspicious_activities(stats, config_dict=None, types=None):
     """
     Detect various suspicious patterns from the raw statistics.
     Aggregates results from individual detection functions.
@@ -132,12 +132,12 @@ def detect_suspicious_activities(stats, config=None, types=None):
     types: set or list of specific detection types to include (e.g., {'brute_force'}).
            If None or 'all', include all.
     """
-    if config is None:
-        config = {
-            "failed_login_threshold": 5,
+    if config_dict is None:
+        config_dict = {
+            "failed_login_threshold": config.FAILED_LOGIN_THRESHOLD,
             "request_rate_threshold": None,
-            "error_rate_threshold": 0.8,
-            "scanning_endpoint_threshold": 40,
+            "error_rate_threshold": config.ERROR_RATE_THRESHOLD,
+            "scanning_endpoint_threshold": config.SCANNING_ENDPOINT_THRESHOLD,
         }
 
     # Determine which detection functions to run
@@ -155,12 +155,12 @@ def detect_suspicious_activities(stats, config=None, types=None):
 
     suspicious = []
     for detector in selected:
-        suspicious.extend(detector(stats, config))
+        suspicious.extend(detector(stats, config_dict))
 
     return suspicious
 
 
-def detect_error_spikes(stats, config):
+def detect_error_spikes(stats, config_dict):
     """
     Detect hours where the 5xx error rate exceeds a threshold.
     Returns a list of (start_hour, end_hour) intervals (consecutive hours).
@@ -182,7 +182,7 @@ def detect_error_spikes(stats, config):
         error_rates[h] = (errors / total) * 100.0
 
     # Determine threshold: use config value if provided, else dynamic (mean + 2*std)
-    threshold = config.get("error_spike_threshold")
+    threshold = config_dict.get("error_spike_threshold")
     if threshold is None:
         rates = list(error_rates.values())
         mean = statistics.mean(rates)
@@ -215,9 +215,9 @@ def generate_report(raw_stats, sections_set=None, suspicious_set=None, top_n=10)
     """
     # Default to all if not provided
     if sections_set is None:
-        sections_set = {'basic', 'endpoints', 'hourly', 'suspicious', 'error-spikes'}
+        sections_set = config.VALID_SECTIONS
     if suspicious_set is None:
-        suspicious_set = {'brute_force', 'high_volume', 'high_error_rate', 'endpoint_scanning'}
+        suspicious_set = config.VALID_SUSPICIOUS
 
     report = {}
 

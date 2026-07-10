@@ -7,6 +7,8 @@ import sys
 import json
 import time
 import os  # for directory creation
+import config
+
 
 # Helper to parse section/type strings into sets
 def parse_list_string(s, valid_values, default_set):
@@ -53,9 +55,9 @@ def main():
         print("Error: --from time must be earlier than or equal to --to time.", file=sys.stderr)
         sys.exit(1)
 
-    # Define valid sections and suspicious types
-    valid_sections = {'basic', 'endpoints', 'hourly', 'suspicious', 'error-spikes'}
-    valid_suspicious = {'brute_force', 'high_volume', 'high_error_rate', 'endpoint_scanning'}
+    # Define valid sections and suspicious types - now imported from config
+    valid_sections = config.VALID_SECTIONS      # UPDATED
+    valid_suspicious = config.VALID_SUSPICIOUS  # UPDATED
 
     # Parse sections and suspicious-types once, converting to sets
     sections_set = parse_list_string(args.sections, valid_sections, valid_sections)

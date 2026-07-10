@@ -1,6 +1,7 @@
 from collections import Counter, defaultdict
 from parser import parse_line
 import gzip
+import config
 
 
 def process_file(file_path, sections_set=None, suspicious_set=None, start_time=None, end_time=None):
@@ -12,9 +13,9 @@ def process_file(file_path, sections_set=None, suspicious_set=None, start_time=N
     """
     # Default to all if not provided (though main should always provide)
     if sections_set is None:
-        sections_set = {'basic', 'endpoints', 'hourly', 'suspicious', 'error-spikes'}
+        sections_set = config.VALID_SECTIONS
     if suspicious_set is None:
-        suspicious_set = {'brute_force', 'high_volume', 'high_error_rate', 'endpoint_scanning'}
+        suspicious_set = config.VALID_SUSPICIOUS
 
     # Determine which high-level sections are enabled
     need_basic = 'basic' in sections_set

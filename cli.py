@@ -1,4 +1,5 @@
 import argparse
+import config
 
 
 def parse_arguments():
@@ -20,7 +21,7 @@ def parse_arguments():
     parser.add_argument(
         "--sections",
         type=str,
-        default="basic",
+        default=config.DEFAULT_SECTIONS_STRING,
         help="Comma-separated list of report sections to include: basic,endpoints,hourly,suspicious,error-spikes,all (default: basic)"
     )
 
@@ -28,7 +29,7 @@ def parse_arguments():
     parser.add_argument(
         "--suspicious-types",
         type=str,
-        default="brute_force",
+        default=config.DEFAULT_SUSPICIOUS_STRING,
         help="Comma-separated list of suspicious activity types: brute_force,high_volume,high_error_rate,endpoint_scanning,all (default: brute_force)"
     )
 
@@ -36,7 +37,7 @@ def parse_arguments():
     parser.add_argument(
         "--top",
         type=int,
-        default=10,
+        default=config.DEFAULT_TOP_N,
         help="Number of top endpoints to display (default: 10)"
     )
 
