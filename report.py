@@ -240,15 +240,10 @@ def generate_report(raw_stats, sections_set=None, suspicious_set=None, top_n=10)
     # Suspicious section
     if 'suspicious' in sections_set:
         # The raw_stats should contain the necessary data if the processor collected it.
-        # We still guard against missing keys, but we can assume they exist if the
-        # corresponding detector was enabled.
-        required_keys = {'requests_per_ip', 'status_per_ip', 'endpoints_per_ip', 'failed_logins'}
-        if all(k in raw_stats for k in required_keys):
-            report['suspicious_activities'] = detect_suspicious_activities(
-                raw_stats, types=suspicious_set
-            )
-        else:
-            report['suspicious_activities'] = []
+        # The detection functions gracefully handle missing data and return empty lists.
+        report['suspicious_activities'] = detect_suspicious_activities(
+            raw_stats, types=suspicious_set
+        )
 
     # Error spikes section
     if 'error-spikes' in sections_set:

@@ -21,7 +21,7 @@ def print_report(report):
 
     # Top endpoints
     if 'top_endpoints' in report:
-        print("\nTop 10 Endpoints:")
+        print(f"\nTop {len(report['top_endpoints'])} Endpoints:")
         print("-" * 40)
         for path, count in report['top_endpoints']:
             print(f"{path:>30} : {count}")

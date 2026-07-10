@@ -29,7 +29,9 @@ def process_file(file_path, sections_set=None, suspicious_set=None, start_time=N
     need_status_per_ip = need_suspicious and 'high_error_rate' in suspicious_set
     need_endpoints_per_ip = need_suspicious and 'endpoint_scanning' in suspicious_set
 
-    # Hourly counters needed for hourly distribution and error spikes
+    # Hourly counters needed for hourly distribution and error spikes 
+    # (this should be used on daily logs since we merge requests from todat 9:00 with tomorrow 9:00)
+    # (can add dates to data for further improvement)
     need_hour_counter = need_hourly or need_error_spikes
     need_error_hour_counter = need_error_spikes
 

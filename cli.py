@@ -1,5 +1,4 @@
 import argparse
-import os  # not needed but might be used later
 
 
 def parse_arguments():
