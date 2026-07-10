@@ -5,6 +5,7 @@ from formatter import print_report
 from parser import parse_timestamp
 import sys
 import json
+import time
 
 # Helper to parse section/type strings into sets
 def parse_list_string(s, valid_values, default_set):
@@ -21,6 +22,9 @@ def parse_list_string(s, valid_values, default_set):
     return set(p for p in parts if p in valid_values)
 
 def main():
+    # Record start time for performance measurement
+    start_time_total = time.time()
+
     args = parse_arguments()
 
     # Validate --top
@@ -70,6 +74,11 @@ def main():
         print(json.dumps(report, indent=2))
     else:
         print_report(report)
+
+    # Record end time and report execution time to stderr
+    end_time_total = time.time()
+    elapsed_seconds = end_time_total - start_time_total
+    print(f"Execution time: {elapsed_seconds:.3f} seconds", file=sys.stderr)
 
 
 if __name__ == "__main__":
