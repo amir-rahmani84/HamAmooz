@@ -22,7 +22,7 @@ def parse_arguments():
         "--sections",
         type=str,
         default=config.DEFAULT_SECTIONS_STRING,
-        help="Comma-separated list of report sections to include: basic,endpoints,hourly,suspicious,error-spikes,all (default: basic)"
+        help="Comma-separated list of report sections to include: basic,endpoints,hourly,suspicious,error-spikes,all (default: basic,endpoints,hourly)"
     )
 
     # Add suspicious types option (only relevant if suspicious section is included)
@@ -65,13 +65,21 @@ def parse_arguments():
         help="Output report in JSON format instead of formatted text"
     )
 
-    # NEW: JSON file output option
+    # JSON file output option
     parser.add_argument(
         "--output",
         type=str,
         help="Write JSON report to the specified file path. "
              "If --json is not given, no report is printed to stdout. "
              "If --json is also given, the JSON report is both printed and saved."
+    )
+
+    # Parser mode option
+    parser.add_argument(
+        "--strict-parser",
+        action="store_true",
+        help="Use the strict parser which validates the log format and supports IPv6. "
+             "The trust parser is faster and assumes well-formed logs."
     )
 
     return parser.parse_args()

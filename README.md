@@ -44,6 +44,7 @@ This prints a basic report: total requests, unique IPs, error rate, top 10 endpo
 | `--to` | End time (same format). |
 | `--json` | Output report in JSON format. |
 | `--output` | Write JSON report to a file. If `--json` is also given, JSON is both printed and saved. |
+| `--strict-parser` | Use the **strict parser** which validates the log format and supports IPv6. The **trust parser** (default) is faster and assumes well‑formed logs. |
 
 ### Examples
 
@@ -62,6 +63,11 @@ This prints a basic report: total requests, unique IPs, error rate, top 10 endpo
    python main.py access.log --json --output report.json
    ```
 
+4. **Use strict parser (IPv6 support):**
+   ```bash
+   python main.py access.log --strict-parser
+   ```
+
 ## Design Decisions
 
 - **Streaming:** The log file is read line‑by‑line using a standard `open()` loop. This ensures even multi‑gigabyte files can be processed without exhausting memory.
@@ -70,6 +76,9 @@ This prints a basic report: total requests, unique IPs, error rate, top 10 endpo
 - **Suspicious activity detection:** Uses statistical thresholds (mean + 2×standard deviation) where possible, making them adaptive to the log’s traffic patterns. Thresholds are configurable via a `config` dict (currently hard‑coded).
 - **Compressed files:** Files ending with `.gz` are automatically decompressed using `gzip.open`.
 - **No external libraries:** The tool is built entirely with Python’s standard library, making it portable and dependency‑free. This decision aligns with the requirement to avoid third‑party parsers; the log parsing is implemented manually with regular expressions.
+- **Parser modes:** Two parsers are available:
+  - **Trust parser (default):** Fast, assumes the log is well‑formed. IP addresses are captured as non‑whitespace strings with no validation.
+  - **Strict parser:** Slower, validates the entire log format, including IP addresses (supports both IPv4 and IPv6). Use this when you need to ensure data integrity or when IPv6 addresses are present.
 
 ## Challenges and Solutions
 
@@ -81,9 +90,13 @@ This prints a basic report: total requests, unique IPs, error rate, top 10 endpo
 
 **Solution:** The `endpoints_per_ip` structure is a `defaultdict(set)` that stores the unique endpoints accessed by each IP. This can become large, but it is only allocated when the `endpoint_scanning` suspicious type is requested. Even then, we prune the data during detection; the set size is limited by the number of distinct endpoints per IP, which is typically much smaller than the total number of requests. For extremely high‑traffic logs, one could further limit the set by capping the number of endpoints tracked per IP, but we chose to keep it simple and let the user decide whether to enable this detection.
 
+**Challenge:** Supporting both IPv4 and IPv6 addresses without relying on external libraries.
+
+**Solution:** The strict parser includes a comprehensive regular expression that matches all common IPv6 notations (including compressed forms). The trust parser uses a simpler `\S+` for maximum speed.
+
 ## Known Issues / Limitations
 
-- **IPv6:** The parser currently only handles IPv4 addresses robustly (the “trust” pattern uses `\S+`, which may include IPv6 but without validation). For production use with IPv6, consider extending the regex.
+- **IPv6:** The strict parser fully supports IPv6; the trust parser does not validate IP format but still captures the address as a string.
 - **Memory:** The detection of endpoint scanning stores a set of distinct endpoints per IP. For logs with millions of unique IPs and many endpoints per IP, this can consume significant memory. The set is pruned only when the detection runs; you can reduce memory by applying a threshold at collection time.
 - **Error spike threshold:** The spike detection uses a dynamic threshold based on the mean and standard deviation of hourly error rates. If the log has very few hours (e.g., only one), the threshold may be unreliable.
 

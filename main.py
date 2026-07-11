@@ -63,9 +63,10 @@ def main():
     sections_set = parse_list_string(args.sections, valid_sections, valid_sections)
     suspicious_set = parse_list_string(args.suspicious_types, valid_suspicious, valid_suspicious)
 
-    # Process file with the validated sets and time filters
+    # Process file with the validated sets, time filters, and parser mode
     stats = process_file(args.logfile, sections_set=sections_set, suspicious_set=suspicious_set,
-                         start_time=start_time, end_time=end_time)
+                         start_time=start_time, end_time=end_time,
+                         strict_parser=args.strict_parser)
 
     # Generate report with the same sets and top_n
     report = generate_report(stats, sections_set=sections_set, suspicious_set=suspicious_set,

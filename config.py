@@ -7,7 +7,7 @@ VALID_SECTIONS = {'basic', 'endpoints', 'hourly', 'suspicious', 'error-spikes'}
 VALID_SUSPICIOUS = {'brute_force', 'high_volume', 'high_error_rate', 'endpoint_scanning'}
 
 # Default values for CLI options
-DEFAULT_SECTIONS_STRING = "basic"
+DEFAULT_SECTIONS_STRING = "basic,endpoints,hourly"
 DEFAULT_SUSPICIOUS_STRING = "brute_force"
 DEFAULT_TOP_N = 10
 

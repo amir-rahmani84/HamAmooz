@@ -4,12 +4,20 @@ import gzip
 import config
 
 
-def process_file(file_path, sections_set=None, suspicious_set=None, start_time=None, end_time=None):
+def process_file(file_path, sections_set=None, suspicious_set=None, start_time=None, end_time=None, strict_parser=False):
     """
     Process a log file and return raw statistics counters.
     Only collects data that is needed based on the provided sections and suspicious types.
     No analysis is performed here – only collection of raw data.
     Optionally filters entries by time range if start_time and/or end_time are provided.
+
+    Args:
+        file_path (str): Path to the log file (may be .gz compressed).
+        sections_set (set): Set of report sections to collect data for.
+        suspicious_set (set): Set of suspicious types to collect data for.
+        start_time (datetime): Optional start time filter.
+        end_time (datetime): Optional end time filter.
+        strict_parser (bool): If True, use the strict parser; else use the trust parser.
     """
     # Default to all if not provided (though main should always provide)
     if sections_set is None:
@@ -31,7 +39,7 @@ def process_file(file_path, sections_set=None, suspicious_set=None, start_time=N
     need_endpoints_per_ip = need_suspicious and 'endpoint_scanning' in suspicious_set
 
     # Hourly counters needed for hourly distribution and error spikes 
-    # (this should be used on daily logs since we merge requests from todat 9:00 with tomorrow 9:00)
+    # (this should be used on daily logs since we merge requests from today 9:00 with tomorrow 9:00)
     # (can add dates to data for further improvement)
     need_hour_counter = need_hourly or need_error_spikes
     need_error_hour_counter = need_error_spikes
@@ -72,7 +80,7 @@ def process_file(file_path, sections_set=None, suspicious_set=None, start_time=N
     with file_obj:
         for line in file_obj:
             line = line.rstrip()
-            entry = parse_line(line)
+            entry = parse_line(line, strict=strict_parser)
 
             if entry is None:
                 if need_basic:
