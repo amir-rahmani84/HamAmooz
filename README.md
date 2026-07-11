@@ -79,6 +79,7 @@ This prints a basic report: total requests, unique IPs, error rate, top 10 endpo
 - **Parser modes:** Two parsers are available:
   - **Trust parser (default):** Fast, assumes the log is well‑formed. IP addresses are captured as non‑whitespace strings with no validation.
   - **Strict parser:** Slower, validates the entire log format, including IP addresses (supports both IPv4 and IPv6). Use this when you need to ensure data integrity or when IPv6 addresses are present.
+- **Multi‑day handling for error spikes:** The `hourly` distribution aggregates request counts by the hour of the day (0–23) across all days in the log. In contrast, the `error-spikes` section calculates error rates **per calendar hour** (e.g., `2026-06-01 09:00` and `2026-06-02 09:00` are treated as separate buckets). This ensures that spikes are detected independently for each day, avoiding false positives when traffic patterns vary by day. Consecutive hours that are actually consecutive in time (e.g., `01/Jun 09:00` and `01/Jun 10:00`) are merged into a single interval in the output.
 
 ## Challenges and Solutions
 
@@ -94,11 +95,15 @@ This prints a basic report: total requests, unique IPs, error rate, top 10 endpo
 
 **Solution:** The strict parser includes a comprehensive regular expression that matches all common IPv6 notations (including compressed forms). The trust parser uses a simpler `\S+` for maximum speed.
 
+**Challenge:** Handling logs that span multiple days for error spike detection without conflating the same hour from different days.
+
+**Solution:** We store total request counts and error counts keyed by `(date, hour)` separately from the simple hourly distribution. This allows us to compute error rates per specific calendar hour and detect spikes that are genuinely time‑localized, rather than averaging across all days. The output clearly shows the full date and time range for each spike interval.
+
 ## Known Issues / Limitations
 
 - **IPv6:** The strict parser fully supports IPv6; the trust parser does not validate IP format but still captures the address as a string.
 - **Memory:** The detection of endpoint scanning stores a set of distinct endpoints per IP. For logs with millions of unique IPs and many endpoints per IP, this can consume significant memory. The set is pruned only when the detection runs; you can reduce memory by applying a threshold at collection time.
-- **Error spike threshold:** The spike detection uses a dynamic threshold based on the mean and standard deviation of hourly error rates. If the log has very few hours (e.g., only one), the threshold may be unreliable.
+- **Error spike threshold:** The spike detection uses a dynamic threshold based on the mean and standard deviation of error rates **per calendar hour** (not per hour of day). If the log contains very few hours (e.g., only one), the threshold may be unreliable. You can override the threshold with a static value by adding `'error_spike_threshold'` to the configuration dictionary (currently not exposed via CLI, but can be modified in the code).
 
 ## Testing
 

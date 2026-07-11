@@ -1,6 +1,7 @@
 import statistics
 from collections import Counter
 import config
+from datetime import datetime, timedelta
 
 def compute_error_rate(stats):
     """Compute overall error rate from raw stats."""
@@ -162,24 +163,26 @@ def detect_suspicious_activities(stats, config_dict=None, types=None):
 
 def detect_error_spikes(stats, config_dict):
     """
-    Detect hours where the 5xx error rate exceeds a threshold.
-    Returns a list of (start_hour, end_hour) intervals (consecutive hours).
+    Detect hours (by date and hour) where the 5xx error rate exceeds a threshold.
+    Returns a list of (start_datetime, end_datetime) intervals (consecutive hours in actual time).
+    Each datetime is the start of the hour (minute=0).
     """
-    hour_counter = stats.get("hourly_distribution")
-    error_hour_counter = stats.get("error_hour_counter")
-    if hour_counter is None or error_hour_counter is None:
+    total_by_dt_hour = stats.get("total_by_dt_hour")
+    error_by_dt_hour = stats.get("error_by_dt_hour")
+    if total_by_dt_hour is None or error_by_dt_hour is None:
         return []
 
-    hours_with_requests = [h for h, count in hour_counter.items() if count > 0]
-    if not hours_with_requests:
-        return []
-
-    # Compute error rate (%) for each such hour
+    # Build a mapping from (date, hour) to error rate
     error_rates = {}
-    for h in hours_with_requests:
-        total = hour_counter[h]
-        errors = error_hour_counter.get(h, 0)
-        error_rates[h] = (errors / total) * 100.0
+    for key, total in total_by_dt_hour.items():
+        errors = error_by_dt_hour.get(key, 0)
+        # Only consider buckets with at least one request
+        if total > 0:
+            rate = (errors / total) * 100.0
+            error_rates[key] = rate
+
+    if not error_rates:
+        return []
 
     # Determine threshold: use config value if provided, else dynamic (mean + 2*std)
     threshold = config_dict.get("error_spike_threshold")
@@ -189,21 +192,32 @@ def detect_error_spikes(stats, config_dict):
         std = statistics.stdev(rates) if len(rates) > 1 else 0.0
         threshold = mean + 2 * std
 
-    # Find hours exceeding threshold
-    spike_hours = sorted([h for h, rate in error_rates.items() if rate > threshold])
+    # Find buckets exceeding threshold
+    spike_buckets = [key for key, rate in error_rates.items() if rate > threshold]
 
-    # Group consecutive hours into intervals
+    if not spike_buckets:
+        return []
+
+    # Convert keys to datetime objects (start of hour)
+    spike_datetimes = []
+    for date, hour in spike_buckets:
+        dt = datetime.combine(date, datetime.min.time().replace(hour=hour))
+        spike_datetimes.append(dt)
+
+    # Sort
+    spike_datetimes.sort()
+
+    # Group consecutive hours (difference of exactly 1 hour)
     intervals = []
-    if spike_hours:
-        start = spike_hours[0]
-        end = spike_hours[0]
-        for h in spike_hours[1:]:
-            if h == end + 1:
-                end = h
-            else:
-                intervals.append((start, end))
-                start = end = h
-        intervals.append((start, end))
+    start = spike_datetimes[0]
+    end = spike_datetimes[0]
+    for dt in spike_datetimes[1:]:
+        if dt == end + timedelta(hours=1):
+            end = dt
+        else:
+            intervals.append((start, end))
+            start = end = dt
+    intervals.append((start, end))
 
     return intervals
 
@@ -247,7 +261,8 @@ def generate_report(raw_stats, sections_set=None, suspicious_set=None, top_n=10)
 
     # Error spikes section
     if 'error-spikes' in sections_set:
-        if 'hourly_distribution' in raw_stats and 'error_hour_counter' in raw_stats:
+        # Use new counters for date+hour
+        if 'total_by_dt_hour' in raw_stats and 'error_by_dt_hour' in raw_stats:
             report['error_spikes'] = detect_error_spikes(raw_stats, {})
         else:
             report['error_spikes'] = []

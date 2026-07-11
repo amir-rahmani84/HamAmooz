@@ -38,11 +38,12 @@ def process_file(file_path, sections_set=None, suspicious_set=None, start_time=N
     need_status_per_ip = need_suspicious and 'high_error_rate' in suspicious_set
     need_endpoints_per_ip = need_suspicious and 'endpoint_scanning' in suspicious_set
 
-    # Hourly counters needed for hourly distribution and error spikes 
-    # (this should be used on daily logs since we merge requests from today 9:00 with tomorrow 9:00)
-    # (can add dates to data for further improvement)
-    need_hour_counter = need_hourly or need_error_spikes
-    need_error_hour_counter = need_error_spikes
+    # Hourly counters for hourly distribution (across all days, just hour of day)
+    need_hour_counter = need_hourly
+
+    # Error spike counters: need total requests and errors keyed by (date, hour)
+    need_error_spike_total = need_error_spikes
+    need_error_spike_errors = need_error_spikes
 
     # Initialize counters only if needed
     total_requests = 0
@@ -52,7 +53,10 @@ def process_file(file_path, sections_set=None, suspicious_set=None, start_time=N
 
     endpoint_counter = Counter() if need_endpoints else None
     hour_counter = Counter() if need_hour_counter else None
-    error_hour_counter = Counter() if need_error_hour_counter else None
+
+    # New counters for error spikes: keyed by (date, hour)
+    total_by_dt_hour = Counter() if need_error_spike_total else None
+    error_by_dt_hour = Counter() if need_error_spike_errors else None
 
     # Suspicious data structures – allocate only when required
     requests_per_ip = Counter() if need_requests_per_ip else None
@@ -116,10 +120,15 @@ def process_file(file_path, sections_set=None, suspicious_set=None, start_time=N
                 endpoint_counter[entry.path] += 1
 
             if need_hour_counter:
+                # For hourly distribution, just the hour of day
                 hour_counter[entry.timestamp.hour] += 1
 
-            if need_error_hour_counter and 500 <= entry.status < 600:
-                error_hour_counter[entry.timestamp.hour] += 1
+            # For error spikes: record total and errors per (date, hour)
+            if need_error_spike_total:
+                key = (entry.timestamp.date(), entry.timestamp.hour)
+                total_by_dt_hour[key] += 1
+                if 500 <= entry.status < 600:
+                    error_by_dt_hour[key] += 1
 
             # Suspicious data updates – each only if needed
             if need_requests_per_ip:
@@ -145,8 +154,9 @@ def process_file(file_path, sections_set=None, suspicious_set=None, start_time=N
         stats['endpoint_counter'] = endpoint_counter
     if need_hour_counter:
         stats['hourly_distribution'] = hour_counter
-    if need_error_hour_counter:
-        stats['error_hour_counter'] = error_hour_counter
+    if need_error_spike_total:
+        stats['total_by_dt_hour'] = total_by_dt_hour
+        stats['error_by_dt_hour'] = error_by_dt_hour
     if need_requests_per_ip:
         stats['requests_per_ip'] = requests_per_ip
     if need_status_per_ip:

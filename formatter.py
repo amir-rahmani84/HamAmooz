@@ -56,9 +56,12 @@ def print_report(report):
             print("ERROR SPIKE DETECTED")
             print("=" * 60)
             for start, end in error_spikes:
+                # Format the date and time range
                 if start == end:
-                    print(f"Hour {start:02d}:00 - {start:02d}:59")
+                    # Single hour
+                    print(f"{start.strftime('%d/%b/%Y %H:00')} – {start.strftime('%H:59')}")
                 else:
-                    print(f"Hours {start:02d}:00 - {end:02d}:59")
+                    # Multiple consecutive hours (start and end are datetime objects)
+                    print(f"{start.strftime('%d/%b/%Y %H:00')} – {end.strftime('%d/%b/%Y %H:59')}")
         else:
             print("\nNo error spikes detected.")
