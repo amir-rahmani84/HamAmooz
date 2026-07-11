@@ -72,26 +72,38 @@ def process_file(file_path, sections_set=None, suspicious_set=None, start_time=N
         raise IsADirectoryError(f"Path is a directory, not a file: {file_path}")
     except PermissionError:
         raise PermissionError(f"Permission denied reading file: {file_path}")
-    except gzip.BadGzipFile:
-        raise ValueError(f"File has .gz extension but is not a valid gzip file: {file_path}")
     except OSError as e:
         raise OSError(f"Error opening file {file_path}: {e}")
 
     with file_obj:
+        # Track whether we are inside the requested time range.
+        # If start_time is None, we start in range from the beginning.
+        in_range = (start_time is None)
+
         for line in file_obj:
             line = line.rstrip()
             entry = parse_line(line, strict=strict_parser)
 
             if entry is None:
-                if need_basic:
-                    bad_lines += 1
+                # Malformed line: only count it if we are already inside the time range.
+                if in_range:
+                    if need_basic:
+                        bad_lines += 1
                 continue
 
-            # Apply time filter if provided
-            if start_time is not None and entry.timestamp < start_time:
-                continue
+            # If we are not yet in range, check if this entry's timestamp is >= start_time.
+            if not in_range:
+                # start_time is guaranteed to be not None here (since in_range is False only when start_time is not None)
+                if entry.timestamp >= start_time:
+                    in_range = True
+                else:
+                    # Still before the start time; skip this entry.
+                    continue
+
+            # Now we are inside the time range.
+            # If end_time is provided and this entry exceeds it, stop processing (assuming sorted log).
             if end_time is not None and entry.timestamp > end_time:
-                continue
+                break
 
             # Conditionally update counters based on which data is needed
             if need_basic:

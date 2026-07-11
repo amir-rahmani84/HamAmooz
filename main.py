@@ -8,6 +8,7 @@ import json
 import time
 import os  # for directory creation
 import config
+import gzip
 
 
 # Helper to parse section/type strings into sets
@@ -56,21 +57,49 @@ def main():
         sys.exit(1)
 
     # Define valid sections and suspicious types - now imported from config
-    valid_sections = config.VALID_SECTIONS      # UPDATED
-    valid_suspicious = config.VALID_SUSPICIOUS  # UPDATED
+    valid_sections = config.VALID_SECTIONS
+    valid_suspicious = config.VALID_SUSPICIOUS
+
+    # Validate --sections
+    sections_raw = args.sections
+    sections_parts = [p.strip() for p in sections_raw.split(',') if p.strip()]
+    sections_to_validate = [p for p in sections_parts if p != 'all']
+    invalid_sections = set(sections_to_validate) - valid_sections
+    if invalid_sections:
+        print(f"Error: Unknown section(s): {', '.join(invalid_sections)}", file=sys.stderr)
+        print(f"Allowed sections: {', '.join(sorted(valid_sections))} or 'all'", file=sys.stderr)
+        sys.exit(1)
+
+    # Validate --suspicious-types
+    susp_raw = args.suspicious_types
+    susp_parts = [p.strip() for p in susp_raw.split(',') if p.strip()]
+    susp_to_validate = [p for p in susp_parts if p != 'all']
+    invalid_susp = set(susp_to_validate) - valid_suspicious
+    if invalid_susp:
+        print(f"Error: Unknown suspicious type(s): {', '.join(invalid_susp)}", file=sys.stderr)
+        print(f"Allowed types: {', '.join(sorted(valid_suspicious))} or 'all'", file=sys.stderr)
+        sys.exit(1)
 
     # Parse sections and suspicious-types once, converting to sets
     sections_set = parse_list_string(args.sections, valid_sections, valid_sections)
     suspicious_set = parse_list_string(args.suspicious_types, valid_suspicious, valid_suspicious)
 
     # Process file with the validated sets, time filters, and parser mode
-    stats = process_file(args.logfile, sections_set=sections_set, suspicious_set=suspicious_set,
-                         start_time=start_time, end_time=end_time,
-                         strict_parser=args.strict_parser)
+    try:
+        stats = process_file(args.logfile, sections_set=sections_set, suspicious_set=suspicious_set,
+                             start_time=start_time, end_time=end_time,
+                             strict_parser=args.strict_parser)
+    except (FileNotFoundError, PermissionError, IsADirectoryError, ValueError, OSError, gzip.BadGzipFile) as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)
 
     # Generate report with the same sets and top_n
-    report = generate_report(stats, sections_set=sections_set, suspicious_set=suspicious_set,
-                             top_n=args.top)
+    try:
+        report = generate_report(stats, sections_set=sections_set, suspicious_set=suspicious_set,
+                                 top_n=args.top)
+    except Exception as e:
+        print(f"Error generating report: {e}", file=sys.stderr)
+        sys.exit(1)
 
     # Handle output
     # If --output is given, write JSON to the specified file
