@@ -11,8 +11,7 @@ from report import (
     detect_error_spikes,
     generate_report
 )
-import config
-from datetime import datetime, timedelta
+from datetime import datetime
 
 class TestReport(unittest.TestCase):
     def setUp(self):
@@ -40,22 +39,23 @@ class TestReport(unittest.TestCase):
         self.assertEqual(result[0]['ip'], '1.1.1.1')
         self.assertEqual(result[0]['detail'], '10 failed logins on /login')
 
-    def test_detect_high_volume(self):
+
+    def test_detect_high_volume_explicit(self):
         req = Counter({'1.1.1.1': 100, '2.2.2.2': 10, '3.3.3.3': 12})
         stats = {'requests_per_ip': req}
-        # With mean=40.67, std≈48.5, threshold mean+2*std≈137.7, so none exceed.
-        # Use a low threshold to force detection.
-        config_dict = {'request_rate_threshold': 20}
-        result = detect_high_volume(stats, config_dict)
+        result = detect_high_volume(stats, {'request_rate_threshold': 20})
         self.assertEqual(len(result), 1)
         self.assertEqual(result[0]['ip'], '1.1.1.1')
+        self.assertEqual(result[0]['detail'], '100 total requests (threshold=20.0)')
 
-        # Test automatic threshold (mean + 2*std) - should also detect only the outlier
-        result_auto = detect_high_volume(stats, {})
-        # With values [100,10,12], mean≈40.67, std≈48.5, threshold≈137.7, so none.
-        # Adjust values to make 100 a clear outlier: e.g., [100, 50, 60] mean=70, std=26.5, threshold=123, none
-        # So we will test with explicit threshold to ensure function works.
-        # Since automatic threshold might not detect, we already tested with explicit.
+    def test_detect_high_volume_automatic(self):
+        # Use a dataset where one IP is a clear outlier (> mean + 2*std)
+        req = Counter({'1.1.1.1': 1000} | {f'2.2.2.{i}': 100 for i in range(1, 10)})
+        # 9 IPs with 100, one with 1000 => mean = (1000+900)/10 = 190, std ≈ 284.6, threshold ≈ 759.2, so 1000 exceeds.
+        stats = {'requests_per_ip': req}
+        result = detect_high_volume(stats, {})  # use automatic
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0]['ip'], '1.1.1.1')
 
     def test_detect_high_error_rate(self):
         status_per_ip = defaultdict(Counter)

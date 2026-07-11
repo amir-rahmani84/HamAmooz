@@ -2,10 +2,8 @@ import unittest
 from unittest.mock import patch, mock_open
 import tempfile
 import os
-import gzip
 from datetime import datetime
 from processor import process_file
-import config
 
 class TestProcessor(unittest.TestCase):
     def setUp(self):

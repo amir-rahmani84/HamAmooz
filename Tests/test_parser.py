@@ -1,5 +1,4 @@
 import unittest
-from datetime import datetime
 from parser import parse_line, parse_timestamp, TRUST_PATTERN, STRICT_PATTERN
 from models import LogEntry
 

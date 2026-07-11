@@ -107,7 +107,53 @@ This prints a basic report: total requests, unique IPs, error rate, top 10 endpo
 
 ## Testing
 
-Not completed Yet
+The project includes a simple test suite covering the core functionality. Tests are written using Python's built‑in `unittest` framework and leverage `unittest.mock` for patching. The test files are located in the `Tests/` directory.
+
+### Test Files
+
+- **`test_cli.py`** – Validates command‑line argument parsing:
+  - Default values and custom arguments
+  - Combination of `--json` and `--output` flags
+  - Edge cases (invalid options are caught in `main.py`, but the parser itself is tested)
+
+- **`test_parser.py`** – Tests the log line parsing:
+  - Timestamp conversion
+  - Trust parser (accepts well‑formed lines, rejects garbage)
+  - Strict parser (validates IPv4/IPv6, status codes, and method names)
+  - Malformed line handling
+
+- **`test_processor.py`** – Tests the file processing logic:
+  - Collection of basic statistics, endpoints, hourly distribution, and suspicious data
+  - Time‑range filtering
+  - Strict parser mode
+  - Handling of malformed lines
+  - Gzip file support (mocked)
+
+- **`test_report.py`** – Tests the report generation and analysis functions:
+  - Error rate computation
+  - Top endpoints extraction
+  - All suspicious activity detectors (brute‑force, high volume, high error rate, endpoint scanning)
+  - Error spike detection (including merging consecutive hours)
+  - Full report assembly
+
+### Running the Tests
+
+You can run all tests with the following command from the project root:
+
+```bash
+python -m unittest discover -s Tests
+```
+
+Or run individual test files by specifying the module path (replace `test_cli` with the desired file name):
+
+```bash
+python -m unittest Tests.test_cli
+python -m unittest Tests.test_parser
+python -m unittest Tests.test_processor
+python -m unittest Tests.test_report
+```
+
+All tests should pass without errors. The test suite is designed to be self‑contained; it uses temporary files and mocks to avoid side effects.
 
 ## Contributing
 
